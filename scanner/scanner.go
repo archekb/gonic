@@ -361,13 +361,23 @@ func (s *Scanner) populateTrackAndAlbumArtists(tx *db.DB, c *Context, i int, par
 
 	// metadata for the album table comes only from the the first track's tags
 	if i == 0 || album.TagArtist == nil {
-		albumArtist, err := populateAlbumArtist(tx, parent, tags.MustAlbumArtist(trags))
-		if err != nil {
-			return fmt.Errorf("populate album artist: %w", err)
+		albumArtists := tags.MustAlbumArtists(trags)
+		var albumArtistIDs []int
+		for _, albumArtistName := range albumArtists {
+			albumArtist, err := populateAlbumArtist(tx, parent, albumArtistName)
+			if err != nil {
+				return fmt.Errorf("populate album artist: %w", err)
+			}
+			albumArtistIDs = append(albumArtistIDs, albumArtist.ID)
 		}
-		if err := populateAlbum(tx, album, albumArtist, trags, stat.ModTime()); err != nil {
+		if err := populateAlbumArtists(tx, album, albumArtistIDs); err != nil {
+			return fmt.Errorf("populate album genres: %w", err)
+		}
+
+		if err := populateAlbum(tx, album, trags, stat.ModTime()); err != nil {
 			return fmt.Errorf("populate album: %w", err)
 		}
+
 		if err := populateAlbumGenres(tx, album, genreIDs); err != nil {
 			return fmt.Errorf("populate album genres: %w", err)
 		}
@@ -386,13 +396,12 @@ func (s *Scanner) populateTrackAndAlbumArtists(tx *db.DB, c *Context, i int, par
 	return nil
 }
 
-func populateAlbum(tx *db.DB, album *db.Album, albumArtist *db.Artist, trags tags.Parser, modTime time.Time) error {
+func populateAlbum(tx *db.DB, album *db.Album, trags tags.Parser, modTime time.Time) error {
 	albumName := tags.MustAlbum(trags)
 	album.TagTitle = albumName
 	album.TagTitleUDec = decoded(albumName)
 	album.TagBrainzID = trags.AlbumBrainzID()
 	album.TagYear = trags.Year()
-	album.TagArtist = albumArtist
 
 	album.ModifiedAt = modTime
 	album.CreatedAt = modTime
@@ -506,6 +515,17 @@ func populateAlbumGenres(tx *db.DB, album *db.Album, genreIDs []int) error {
 
 	if err := tx.InsertBulkLeftMany("album_genres", []string{"album_id", "genre_id"}, album.ID, genreIDs); err != nil {
 		return fmt.Errorf("insert bulk album genres: %w", err)
+	}
+	return nil
+}
+
+func populateAlbumArtists(tx *db.DB, album *db.Album, albumArtistIDs []int) error {
+	if err := tx.Where("album_id=?", album.ID).Delete(db.AlbumGenre{}).Error; err != nil {
+		return fmt.Errorf("delete old album album artists: %w", err)
+	}
+
+	if err := tx.InsertBulkLeftMany("album_artists", []string{"album_id", "artist_id"}, album.ID, albumArtistIDs); err != nil {
+		return fmt.Errorf("insert bulk album artists: %w", err)
 	}
 	return nil
 }

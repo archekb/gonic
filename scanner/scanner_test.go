@@ -624,3 +624,6 @@ func TestAlbumAndArtistSameNameWeirdness(t *testing.T) {
 	assert.NoError(m.DB().Find(&albums).Error)
 	assert.Equal(len(albums), 5) // root, 2 artists, 2 albums
 }
+
+func TestMultiArtistSupport(t *testing.T) {
+}

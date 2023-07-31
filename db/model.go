@@ -243,6 +243,11 @@ func (a *Album) GenreStrings() []string {
 	return strs
 }
 
+type AlbumArtists struct {
+	AlbumID  int `gorm:"not null; unique_index:idx_album_id_artist_id" sql:"default: null; type:int REFERENCES albums(id) ON DELETE CASCADE"`
+	ArtistID int `gorm:"not null; unique_index:idx_album_id_artist_id" sql:"default: null; type:int REFERENCES artists(id) ON DELETE CASCADE"`
+}
+
 type PlayQueue struct {
 	ID        int `gorm:"primary_key"`
 	CreatedAt time.Time

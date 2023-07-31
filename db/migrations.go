@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/jinzhu/gorm"
@@ -55,6 +56,7 @@ func (db *DB) Migrate(ctx MigrationContext) error {
 		construct(ctx, "202211111057", migratePlaylistsQueuesToFullID),
 		construct(ctx, "202304221528", migratePlaylistsToM3U),
 		construct(ctx, "202305301718", migratePlayCountToLength),
+		construct(ctx, "202307281628", migrateAlbumArtistsMany2Many),
 	}
 
 	return gormigrate.
@@ -535,6 +537,30 @@ func migratePlayCountToLength(tx *gorm.DB, _ MigrationContext) error {
 	if err := step.Error; err != nil {
 		return fmt.Errorf("calculate length: %w", err)
 	}
+
+	return nil
+}
+
+func migrateAlbumArtistsMany2Many(tx *gorm.DB, _ MigrationContext) error {
+	step := tx.AutoMigrate(
+		Album{},
+		Artist{},
+		AlbumArtists{},
+	)
+	if err := step.Error; err != nil {
+		return fmt.Errorf("step auto migrate: %w", err)
+	}
+
+	step = tx.Exec(`
+		INSERT INTO album_artists (album_id, artist_id)
+		SELECT id album_id, tag_artist_id artist_id
+		FROM albums;
+	`)
+	if err := step.Error; err != nil && !strings.Contains(err.Error(), "no such column") {
+		return fmt.Errorf("step insert from albums: %w", err)
+	}
+
+	// TODO: delete old columns?
 
 	return nil
 }
